@@ -322,7 +322,7 @@ def select_features(df: pd.DataFrame, target_cols: List[str]) -> Tuple[pd.DataFr
         'soh', 'capacity_retention', 'capacity_fade',  # Direct SOH components
         'rul',  # Direct RUL target
         'capacity',  # Used to compute SOH
-        'cycle_degradation', 'cycle_degradation_pct',  # Used to compute severity/risk
+        'cycle_degradation', 'cycle_degradation_pct',  # Used to compute severity
         'temp_mean', 'voltage_mean',  # Used to compute failure_risk_score
     ])
     
