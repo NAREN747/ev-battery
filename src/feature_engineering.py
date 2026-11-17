@@ -105,86 +105,99 @@ def compute_rul(df: pd.DataFrame, eol_threshold: float = 70.0, min_cycles: int =
 def compute_degradation_severity(df: pd.DataFrame) -> pd.DataFrame:
     """
     Classify degradation severity into Normal, Accelerated, Critical.
-    Based on degradation rate per cycle compared to population statistics.
+    Uses ONLY current cycle's degradation rate (observable), not full-lifetime statistics.
     """
     df = df.copy()
     
-    # Compute average degradation rate per battery (SOH % per cycle)
-    degradation_rates = df.groupby('battery_id')['cycle_degradation_pct'].mean().abs()
+    # Use current cycle's absolute degradation rate (observable at this cycle)
+    # Classify based on absolute thresholds, not population quantiles
+    current_degradation = df['cycle_degradation_pct'].abs()
     
-    # Define thresholds based on distribution
-    # Normal: bottom 60%, Accelerated: 60-90%, Critical: top 10%
-    normal_thresh = degradation_rates.quantile(0.6)
-    accelerated_thresh = degradation_rates.quantile(0.9)
+    # Absolute thresholds for degradation rate per cycle (% SOH per cycle)
+    # These are domain-defined, not data-driven quantiles
+    NORMAL_THRESH = 0.10      # < 0.1% SOH loss per cycle = Normal
+    ACCELERATED_THRESH = 0.30  # 0.1-0.3% = Accelerated
+    # > 0.3% = Critical
     
-    def classify_severity(bid):
-        rate = degradation_rates.get(bid, 0)
-        if rate <= normal_thresh:
+    def classify_severity(rate):
+        if rate <= NORMAL_THRESH:
             return 'Normal'
-        elif rate <= accelerated_thresh:
+        elif rate <= ACCELERATED_THRESH:
             return 'Accelerated'
         else:
             return 'Critical'
     
-    df['degradation_severity'] = df['battery_id'].map(classify_severity)
+    df['degradation_severity'] = current_degradation.apply(classify_severity)
     
     # Also add numeric encoding
     severity_map = {'Normal': 0, 'Accelerated': 1, 'Critical': 2}
     df['degradation_severity_encoded'] = df['degradation_severity'].map(severity_map)
     
-    return df, {'normal_thresh': normal_thresh, 'accelerated_thresh': accelerated_thresh}
+    return df, {'normal_thresh': NORMAL_THRESH, 'accelerated_thresh': ACCELERATED_THRESH}
 
 
 def compute_failure_risk(df: pd.DataFrame) -> pd.DataFrame:
     """
     Classify failure risk into Low, Medium, High.
-    Based on current SOH, RUL, and degradation severity.
-    Battery-grouped evaluation.
+    Uses ONLY current/observable features (no retrospective RUL or full-lifetime severity).
+    Uses FIXED thresholds (no dataset-dependent quantiles) to prevent leakage.
     """
     df = df.copy()
     
-    # Risk factors
-    # 1. Current SOH (lower = higher risk)
-    # 2. RUL (lower = higher risk)
-    # 3. Degradation severity
-    # 4. Temperature stress (high temp = higher risk)
+    # Risk factors based on CURRENT observable state only:
+    # 1. Current SOH (lower = higher risk) - observable at current cycle
+    # 2. Current degradation rate (cycle_degradation_pct) - observable trend
+    # 3. Temperature stress (high temp = higher risk) - observable
+    # 4. Voltage/current anomalies - observable
     
-    # Normalize risk factors to 0-1 scale
+    # Normalize risk factors to 0-1 scale using FIXED thresholds
     soh_risk = 1 - (df['soh'] / 100)  # 0 at 100% SOH, 1 at 0% SOH
-    rul_risk = 1 / (1 + df['rul'] / 100)  # Approaches 1 as RUL -> 0
-    severity_risk = df['degradation_severity_encoded'] / 2  # 0, 0.5, 1
+    
+    # Degradation rate risk - use FIXED threshold (not dataset max)
+    # Typical degradation: 0-0.5% SOH per cycle
+    deg_rate = df['cycle_degradation_pct'].abs()
+    deg_rate_risk = (deg_rate / 0.5).clip(0, 1)  # Fixed 0.5% threshold
+    
+    # Temperature stress - FIXED thresholds
     temp_risk = (df['temp_mean'] - 20) / 60  # Normalize assuming 20-80°C range
     temp_risk = temp_risk.clip(0, 1)
     
-    # Weighted risk score
+    # Voltage anomaly risk (deviation from nominal) - FIXED threshold
+    voltage_risk = (df['voltage_mean'] - 3.7).abs() / 2.0  # Nominal ~3.7V
+    voltage_risk = voltage_risk.clip(0, 1)
+    
+    # Weighted risk score (no RUL, no retrospective severity)
     risk_score = (
-        0.35 * soh_risk +
-        0.30 * rul_risk +
-        0.20 * severity_risk +
-        0.15 * temp_risk
+        0.40 * soh_risk +
+        0.30 * deg_rate_risk +
+        0.20 * temp_risk +
+        0.10 * voltage_risk
     )
     
     df['failure_risk_score'] = risk_score
     
-    # Classify into Low, Medium, High
-    low_thresh = risk_score.quantile(0.4)
-    high_thresh = risk_score.quantile(0.8)
+    # Classify into Low, Medium, High using FIXED thresholds (not dataset quantiles)
+    # These are domain-defined thresholds
+    LOW_THRESH = 0.30
+    HIGH_THRESH = 0.65
     
     def classify_risk(score):
-        if score <= low_thresh:
+        if score <= LOW_THRESH:
             return 'Low'
-        elif score <= high_thresh:
+        elif score <= HIGH_THRESH:
             return 'Medium'
         else:
             return 'High'
     
-    df['failure_risk'] = df['failure_risk_score'].apply(classify_risk)
+    df['failure_risk'] = df['failure_risk_score'].apply(
+        lambda s: 'Low' if s <= 0.30 else ('Medium' if s <= 0.65 else 'High')
+    )
     
     # Numeric encoding
     risk_map = {'Low': 0, 'Medium': 1, 'High': 2}
     df['failure_risk_encoded'] = df['failure_risk'].map(risk_map)
     
-    return df, {'low_thresh': low_thresh, 'high_thresh': high_thresh}
+    return df, {'low_thresh': 0.30, 'high_thresh': 0.65}
 
 
 def engineer_statistical_features(df: pd.DataFrame) -> pd.DataFrame:
@@ -218,44 +231,50 @@ def engineer_statistical_features(df: pd.DataFrame) -> pd.DataFrame:
 def engineer_historical_features(df: pd.DataFrame, windows: List[int] = [3, 5, 10]) -> pd.DataFrame:
     """
     Create historical features: rolling statistics, previous cycle values, cycle-to-cycle deltas.
+    Uses ONLY past data (shift by 1) to prevent leakage.
+    Excludes target-derived features (SOH, capacity, RUL) to prevent leakage.
     """
     df = df.copy()
     df = df.sort_values(['battery_id', 'cycle']).reset_index(drop=True)
     
-    # Features to compute rolling stats for
+    # Features to compute rolling stats for - ONLY raw sensor data
+    # Excluded: capacity, soh, rul, capacity_retention, capacity_fade, cycle_degradation_pct, soh_*, capacity_*, rul_*
     feature_cols = [
-        'capacity', 'soh', 'voltage_mean', 'voltage_min', 'voltage_max',
+        'voltage_mean', 'voltage_min', 'voltage_max',
         'current_mean', 'temp_mean', 'temp_max', 'duration',
-        'cycle_degradation_pct', 'ir_proxy' if 'ir_proxy' in df.columns else 'voltage_mean'
+        'ir_proxy' if 'ir_proxy' in df.columns else 'voltage_mean'
     ]
     feature_cols = [c for c in feature_cols if c in df.columns]
     
     for window in windows:
         for col in feature_cols:
-            # Rolling mean
-            df[f'{col}_roll_mean_{window}'] = df.groupby('battery_id')[col].transform(
+            # Rolling stats on PAST data only: shift by 1, then rolling
+            shifted = df.groupby('battery_id')[col].shift(1)
+            
+            # Rolling mean on past data only
+            df[f'{col}_roll_mean_{window}'] = shifted.groupby(df['battery_id']).transform(
                 lambda x: x.rolling(window, min_periods=1).mean()
             )
-            # Rolling std
-            df[f'{col}_roll_std_{window}'] = df.groupby('battery_id')[col].transform(
+            # Rolling std on past data only
+            df[f'{col}_roll_std_{window}'] = shifted.groupby(df['battery_id']).transform(
                 lambda x: x.rolling(window, min_periods=1).std().fillna(0)
             )
-            # Rolling min/max
-            df[f'{col}_roll_min_{window}'] = df.groupby('battery_id')[col].transform(
+            # Rolling min/max on past data only
+            df[f'{col}_roll_min_{window}'] = shifted.groupby(df['battery_id']).transform(
                 lambda x: x.rolling(window, min_periods=1).min()
             )
-            df[f'{col}_roll_max_{window}'] = df.groupby('battery_id')[col].transform(
+            df[f'{col}_roll_max_{window}'] = shifted.groupby(df['battery_id']).transform(
                 lambda x: x.rolling(window, min_periods=1).max()
             )
     
-    # Previous cycle values (lag features)
-    lag_cols = ['capacity', 'soh', 'voltage_mean', 'current_mean', 'temp_mean', 'cycle_degradation_pct']
+    # Previous cycle values (lag features) - ONLY for raw sensor data
+    lag_cols = ['voltage_mean', 'current_mean', 'temp_mean']
     lag_cols = [c for c in lag_cols if c in df.columns]
     for col in lag_cols:
         df[f'{col}_lag1'] = df.groupby('battery_id')[col].shift(1)
         df[f'{col}_lag2'] = df.groupby('battery_id')[col].shift(2)
     
-    # Cycle-to-cycle deltas
+    # Cycle-to-cycle deltas - ONLY for raw sensor data
     for col in lag_cols:
         df[f'{col}_delta1'] = df.groupby('battery_id')[col].diff()
         df[f'{col}_delta2'] = df.groupby('battery_id')[col].diff(2)
