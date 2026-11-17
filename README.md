@@ -1,0 +1,156 @@
+# EV Battery Predictive Maintenance System
+
+An end-to-end ML pipeline for Electric Vehicle (EV) battery health monitoring using the NASA Li-ion Battery Aging Dataset. Predicts State of Health (SOH), Remaining Useful Life (RUL), degradation severity, and failure risk with a rule-based maintenance decision engine and interactive Streamlit dashboard.
+
+## Features
+
+- **SOH Estimation** - Predict battery health from discharge capacity (MAE: 0.00%)
+- **RUL Prediction** - Cycles until 70% EOL threshold (MAE: 141 cycles)
+- **Degradation Classification** - Normal / Accelerated / Critical (F1: 67%)
+- **Failure Risk Classification** - Low / Medium / High (F1: 100%)
+- **Maintenance Decision Engine** - 15 safety-critical rules with timelines
+- **Interactive Dashboard** - Streamlit UI with degradation curves, predictions, recommendations
+- **Leakage-Free Training** - Battery-wise GroupShuffleSplit / GroupKFold
+
+## Quick Start
+
+### Prerequisites
+- Python 3.10+
+- Git
+
+### Installation
+
+```bash
+# Clone the repository
+git clone https://github.com/NAREN747/ev-battery.git
+cd ev-battery
+
+# Create virtual environment
+python -m venv venv
+
+# Activate virtual environment
+# Windows:
+venv\Scripts\activate
+# Linux/Mac:
+source venv/bin/activate
+
+# Install dependencies
+pip install -r ev_maintenance/requirements.txt
+```
+
+### Run the Full Pipeline
+
+```bash
+cd ev_maintenance
+python run.py all
+```
+
+This executes:
+1. **Preprocessing** - Loads NASA data, creates `data/processed/cycle_summary.csv`
+2. **Feature Engineering** - Computes SOH, RUL, severity, risk + 189 features
+3. **Model Training** - Trains 13 models, saves best per target to `models/`
+
+### Launch Dashboard
+
+```bash
+cd ev_maintenance
+python run.py dashboard
+```
+
+Open http://localhost:8501 in your browser.
+
+## Project Structure
+
+```
+ev_maintenance/
+├── run.py                    # CLI entry point
+├── requirements.txt          # Python dependencies
+├── src/
+│   ├── data_preprocessing.py    # NASA data loading & cleaning
+│   ├── feature_engineering.py   # SOH, RUL, severity, risk + features
+│   ├── model_training.py        # Battery-wise split, model comparison
+│   └── maintenance_decision.py  # 15-rule decision engine
+├── dashboard/
+│   └── app.py                 # Streamlit dashboard
+├── data/
+│   ├── processed/             # cycle_summary.csv (generated)
+│   └── features/              # features.csv, targets.csv, enriched_data.csv (generated)
+├── models/                    # best_*.pkl, preprocessor.pkl (generated, gitignored)
+└── plots/                     # Evaluation plots (generated)
+```
+
+## Requirements
+
+See `ev_maintenance/requirements.txt`:
+
+```
+pandas>=2.0.0
+numpy>=1.24.0
+scipy>=1.10.0
+scikit-learn>=1.3.0
+matplotlib>=3.7.0
+seaborn>=0.12.0
+streamlit>=1.25.0
+joblib>=1.3.0
+plotly>=5.15.0
+```
+
+Install with: `pip install -r ev_maintenance/requirements.txt`
+
+## Model Performance
+
+| Target | Best Model | Test Metric |
+|--------|------------|-------------|
+| SOH | LinearRegression | MAE: 0.00, R²: 1.000 |
+| RUL | RandomForest | MAE: 141 cycles, R²: 0.54 |
+| Degradation Severity | LogisticRegression | Acc: 65%, F1: 67% |
+| Failure Risk | GradientBoosting | Acc: 100%, F1: 100% |
+
+All splits are battery-wise (GroupShuffleSplit) to prevent data leakage.
+
+## Data Source
+
+- **Dataset**: NASA Li-ion Battery Aging Dataset (NASA Ames Research Center)
+- **Source**: https://data.nasa.gov/dataset/li-ion-battery-aging-datasets
+- **Format**: 34 batteries, 2,750 cycles, 15 raw features → 189 engineered features
+
+## Retraining
+
+```bash
+# Full retrain
+python run.py all
+
+# Individual stages
+python run.py preprocess   # Raw data → cycle_summary.csv
+python run.py features     # cycle_summary.csv → features + targets
+python run.py train        # Features → trained models
+```
+
+## Configuration
+
+Key parameters in `src/feature_engineering.py`:
+- `eol_threshold=70.0` - SOH % for End-of-Life
+- Severity quantiles (60%/90%) in `compute_degradation_severity()`
+- Risk weights (35/30/20/15) in `compute_failure_risk()`
+
+Key parameters in `src/maintenance_decision.py`:
+- SOH thresholds: HEALTHY=90, DEGRADED=80, EOL=70, CRITICAL=60
+- RUL thresholds: PLENTY=200, MODERATE=100, LOW=50, CRITICAL=20
+- Temperature thresholds: NORMAL=40, ELEVATED=50, HIGH=60, CRITICAL=70°C
+
+## Model Files
+
+Model files (`.pkl`) and data CSVs are gitignored due to size. To share:
+- Use Git LFS: `git lfs track "*.pkl" "data/**/*.csv"`
+- Or upload as GitHub Release assets
+- Or share via cloud storage (Google Drive, S3, HuggingFace Hub)
+
+## License
+
+MIT License - feel free to use for research and commercial purposes.
+
+## Citation
+
+If you use this in research, please cite:
+- NASA Li-ion Battery Aging Dataset (NASA Ames Research Center)
+- This implementation: https://github.com/NAREN747/ev-battery
