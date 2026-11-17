@@ -4,10 +4,10 @@ An end-to-end ML pipeline for Electric Vehicle (EV) battery health monitoring us
 
 ## Features
 
-- **SOH Estimation** - Predict battery health from discharge capacity (MAE: 0.00%)
-- **RUL Prediction** - Cycles until 70% EOL threshold (MAE: 141 cycles)
-- **Degradation Classification** - Normal / Accelerated / Critical (F1: 67%)
-- **Failure Risk Classification** - Low / Medium / High (F1: 100%)
+- **SOH Estimation** - Predict battery health from discharge capacity (MAE: 2.7%)
+- **RUL Prediction** - Cycles until 70% EOL threshold (MAE: 83 cycles)
+- **Degradation Classification** - Normal / Accelerated / Critical (F1: 40%)
+- **Failure Risk Classification** - Low / Medium / High (F1: 53%)
 - **Maintenance Decision Engine** - 15 safety-critical rules with timelines
 - **Interactive Dashboard** - Streamlit UI with degradation curves, predictions, recommendations
 - **Leakage-Free Training** - Battery-wise GroupShuffleSplit / GroupKFold
@@ -98,8 +98,6 @@ Install with: `pip install -r requirements.txt`
 
 ## Model Performance
 
-## Model Performance
-
 | Target | Best Model | Test Metric |
 |--------|------------|-------------|
 | SOH | RandomForest | MAE: 2.7%, R²: 0.81 |
@@ -140,6 +138,14 @@ Key parameters in `src/maintenance_decision.py`:
 - SOH thresholds: HEALTHY=90, DEGRADED=80, EOL=70, CRITICAL=60
 - RUL thresholds: PLENTY=200, MODERATE=100, LOW=50, CRITICAL=20
 - Temperature thresholds: NORMAL=40, ELEVATED=50, HIGH=60, CRITICAL=70°C
+
+## Important Methodology Notes
+
+**Failure Risk Classification**: The failure risk labels are generated using a rule-based formula (SOH 40%, degradation rate 30%, temperature 20%, voltage 10%). The classifier learns to reproduce this rule-based classification, not independently predict future battery failure events. This is a *risk classification* task, not a future-failure prediction task.
+
+**RUL Label Construction**: RUL labels are calculated using each battery's eventual end-of-life cycle (when SOH ≤ 70%). For batteries that don't reach this threshold in the observed data, EOL is estimated by extrapolating the average degradation rate. These are *estimated* training labels, not observed remaining useful life.
+
+**Cross-Validation**: Preprocessing (imputation and scaling) is performed inside the GroupKFold cross-validation loop to prevent leakage from validation folds into training statistics.
 
 ## Model Files
 
