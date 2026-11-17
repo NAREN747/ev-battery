@@ -252,21 +252,21 @@ def train_all_models(X, y, groups, train_idx, val_idx, test_idx):
         target_results = {}
         
         for model_name, model in models.items():
-            result = train_and_evaluate_model(
-                model_name, model,
-                X_train_processed, y_train,
-                X_val_processed, y_val,
-                X_test_processed, y_test,
-                task_type
-            )
+                    result = train_and_evaluate_model(
+                        model_name, model,
+                        X_train_processed, y_train,
+                        X_val_processed, y_val,
+                        X_test_processed, y_test,
+                        task_type
+                    )
             
-            if result['status'] == 'success':
-                # Run cross-validation on training data
-                print(f"    Running cross-validation...")
-                cv_results = run_cross_validation(
-                    model, X_train, y_train, groups_train, cv=5, task_type=task_type
-                )
-                result['cv_results'] = cv_results
+                    if result['status'] == 'success':
+                        # Run cross-validation on training data
+                        print(f"    Running cross-validation...")
+                        cv_results = run_cross_validation(
+                            model, X_train, y_train, groups_train, cv=5, task_type=task_type
+                        )
+                        result['cv_results'] = cv_results
                 
                 print(f"    Val {task_type}: {result['val_metrics']}")
                 print(f"    Test {task_type}: {result['test_metrics']}")

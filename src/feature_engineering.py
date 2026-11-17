@@ -52,6 +52,7 @@ def compute_rul(df: pd.DataFrame, eol_threshold: float = 70.0, min_cycles: int =
     Compute Remaining Useful Life (RUL) - cycles until SOH <= 70%.
     Only computes for batteries where EOL is observed or can be reasonably extrapolated.
     Filters out batteries with too few cycles.
+    Returns both RUL and a flag indicating whether EOL was observed.
     """
     df = df.copy()
     
@@ -141,6 +142,7 @@ def compute_failure_risk(df: pd.DataFrame) -> pd.DataFrame:
     Classify failure risk into Low, Medium, High.
     Uses ONLY current/observable features (no retrospective RUL or full-lifetime severity).
     Uses FIXED thresholds (no dataset-dependent quantiles) to prevent leakage.
+    Returns both the risk score (for reference) and the encoded label.
     """
     df = df.copy()
     
