@@ -137,7 +137,7 @@ def main():
     else:
         print(f"NASA data not found at {CYCLE_SUMMARY_PATH}")
         print("Falling back to synthetic data...")
-        return create_synthetic_data()
+        df = create_synthetic_data()
     
     # Validate and clean
     df = validate_and_clean(df)

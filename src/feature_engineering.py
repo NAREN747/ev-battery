@@ -297,6 +297,12 @@ def select_features(df: pd.DataFrame, target_cols: List[str]) -> Tuple[pd.DataFr
     exclude_cols = set(target_cols + [
         'battery_id', 'cycle', 'initial_capacity', 'eol_cycle', 'eol_observed',
         'degradation_severity', 'failure_risk',  # String labels
+        'degradation_severity_encoded', 'failure_risk_encoded',  # Encoded labels
+        # Leaky features that directly determine or are used to compute targets:
+        'failure_risk_score',  # Used to compute failure_risk label - MAJOR LEAKAGE
+        'soh', 'capacity_retention', 'capacity_fade',  # Direct SOH components
+        'rul',  # Direct RUL target
+        'capacity',  # Used to compute SOH
     ])
     
     # Also exclude intermediate computation columns
