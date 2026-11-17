@@ -286,12 +286,10 @@ def engineer_historical_features(df: pd.DataFrame, windows: List[int] = [3, 5, 1
 
 
 def engineer_cycle_features(df: pd.DataFrame) -> pd.DataFrame:
-    """Engineer features related to cycle number and progression."""
+    """Engineer features related to cycle number and progression.
+    Excludes future-dependent features (no max_cycle normalization).
+    """
     df = df.copy()
-    
-    # Normalized cycle (0 to 1 per battery)
-    max_cycle = df.groupby('battery_id')['cycle'].transform('max')
-    df['cycle_normalized'] = df['cycle'] / max_cycle
     
     # Cycle squared (for non-linear degradation)
     df['cycle_squared'] = df['cycle'] ** 2
@@ -303,6 +301,8 @@ def engineer_cycle_features(df: pd.DataFrame) -> pd.DataFrame:
     # Cycles per day estimate (if duration available)
     if 'duration' in df.columns:
         df['cycles_per_day_est'] = 86400 / (df['duration'] + 1e-6)
+    
+    # REMOVED: cycle_normalized = cycle / max_cycle (uses future max_cycle)
     
     return df
 
