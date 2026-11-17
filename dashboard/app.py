@@ -120,16 +120,20 @@ def load_models():
         if model_path.exists():
             models[target] = joblib.load(model_path)
     
-    return preprocessor, models
+    # Load feature names
+    feature_names = []
+    feature_names_path = FEATURES_DIR / "feature_names.txt"
+    if feature_names_path.exists():
+        with open(feature_names_path, 'r') as f:
+            feature_names = [line.strip() for line in f.readlines()]
+    
+    return preprocessor, models, feature_names
 
 
-def predict_for_battery(battery_data: pd.DataFrame, preprocessor, models):
-    """Make predictions for a battery's cycles."""
-    X = battery_data.drop(columns=['battery_id', 'cycle', 'soh', 'rul', 
-                                    'degradation_severity', 'failure_risk',
-                                    'degradation_severity_encoded', 'failure_risk_encoded',
-                                    'initial_capacity', 'eol_cycle', 'eol_observed'], 
-                           errors='ignore')
+def predict_for_battery(battery_data: pd.DataFrame, preprocessor, models, feature_names: list):
+    """Make predictions for a battery's cycles using exact training feature names."""
+    # Use exact training feature names and order
+    X = battery_data.reindex(columns=feature_names, fill_value=0)
     
     X_processed = preprocessor.transform(X)
     
@@ -296,7 +300,7 @@ def main():
     # Load data and models
     with st.spinner("Loading data and models..."):
         enriched, features, targets, test_data, test_idx = load_data()
-        preprocessor, models = load_models()
+        preprocessor, models, feature_names = load_models()
     
     # Sidebar
     st.sidebar.title("Navigation")
@@ -315,7 +319,7 @@ def main():
     battery_data = test_data[test_data['battery_id'] == selected_battery].sort_values('cycle')
     
     # Make predictions
-    predictions = predict_for_battery(battery_data, preprocessor, models)
+    predictions = predict_for_battery(battery_data, preprocessor, models, feature_names)
     
     # Decode categorical predictions
     severity_map = {0: 'Normal', 1: 'Accelerated', 2: 'Critical'}
