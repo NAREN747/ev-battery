@@ -35,13 +35,12 @@ venv\Scripts\activate
 source venv/bin/activate
 
 # Install dependencies
-pip install -r ev_maintenance/requirements.txt
+pip install -r requirements.txt
 ```
 
 ### Run the Full Pipeline
 
 ```bash
-cd ev_maintenance
 python run.py all
 ```
 
@@ -53,7 +52,6 @@ This executes:
 ### Launch Dashboard
 
 ```bash
-cd ev_maintenance
 python run.py dashboard
 ```
 
@@ -62,7 +60,7 @@ Open http://localhost:8501 in your browser.
 ## Project Structure
 
 ```
-ev_maintenance/
+ev-battery/
 ├── run.py                    # CLI entry point
 ├── requirements.txt          # Python dependencies
 ├── src/
@@ -76,7 +74,8 @@ ev_maintenance/
 │   ├── processed/             # cycle_summary.csv (generated)
 │   └── features/              # features.csv, targets.csv, enriched_data.csv (generated)
 ├── models/                    # best_*.pkl, preprocessor.pkl (generated, gitignored)
-└── plots/                     # Evaluation plots (generated)
+├── plots/                     # Evaluation plots (generated)
+└── requirements.txt
 ```
 
 ## Requirements
@@ -95,7 +94,7 @@ joblib>=1.3.0
 plotly>=5.15.0
 ```
 
-Install with: `pip install -r ev_maintenance/requirements.txt`
+Install with: `pip install -r requirements.txt`
 
 ## Model Performance
 
