@@ -98,14 +98,17 @@ Install with: `pip install -r requirements.txt`
 
 ## Model Performance
 
+## Model Performance
+
 | Target | Best Model | Test Metric |
 |--------|------------|-------------|
-| SOH | LinearRegression | MAE: 0.00, R²: 1.000 |
-| RUL | RandomForest | MAE: 141 cycles, R²: 0.54 |
-| Degradation Severity | LogisticRegression | Acc: 65%, F1: 67% |
-| Failure Risk | GradientBoosting | Acc: 100%, F1: 100% |
+| SOH | RandomForest | MAE: 2.7%, R²: 0.81 |
+| RUL | RandomForest | MAE: 83 cycles |
+| Degradation Severity | LogisticRegression | F1: 40% |
+| Failure Risk | LogisticRegression | F1: 53% |
 
 All splits are battery-wise (GroupShuffleSplit) to prevent data leakage.
+Cross-validation uses GroupKFold with preprocessing inside the CV loop.
 
 ## Data Source
 
@@ -129,8 +132,9 @@ python run.py train        # Features → trained models
 
 Key parameters in `src/feature_engineering.py`:
 - `eol_threshold=70.0` - SOH % for End-of-Life
-- Severity quantiles (60%/90%) in `compute_degradation_severity()`
-- Risk weights (35/30/20/15) in `compute_failure_risk()`
+- Severity thresholds: Normal < 0.10, Accelerated 0.10-0.30, Critical > 0.30 (% SOH/cycle)
+- Risk weights: SOH 40%, Degradation rate 30%, Temperature 20%, Voltage 10%
+- Risk thresholds: Low ≤ 0.30, Medium 0.30-0.65, High > 0.65
 
 Key parameters in `src/maintenance_decision.py`:
 - SOH thresholds: HEALTHY=90, DEGRADED=80, EOL=70, CRITICAL=60

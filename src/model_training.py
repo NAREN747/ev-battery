@@ -264,7 +264,7 @@ def train_all_models(X, y, groups, train_idx, val_idx, test_idx):
                 # Run cross-validation on training data
                 print(f"    Running cross-validation...")
                 cv_results = run_cross_validation(
-                    model, X_train_processed, y_train, groups_train, cv=5, task_type=task_type
+                    model, X_train, y_train, groups_train, cv=5, task_type=task_type
                 )
                 result['cv_results'] = cv_results
                 

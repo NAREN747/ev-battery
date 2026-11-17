@@ -324,6 +324,7 @@ def select_features(df: pd.DataFrame, target_cols: List[str]) -> Tuple[pd.DataFr
         'capacity',  # Used to compute SOH
         'cycle_degradation', 'cycle_degradation_pct',  # Used to compute severity
         'temp_mean', 'voltage_mean',  # Used to compute failure_risk_score
+        'power_mean', 'energy_throughput', 'ir_proxy', 'voltage_cv', 'temp_cv',  # Derived from leaked features
     ])
     
     feature_cols = [c for c in df.columns if c not in exclude_cols and df[c].dtype in ['float64', 'int64', 'float32', 'int32']]
