@@ -145,6 +145,51 @@ Model files (`.pkl`) and data CSVs are gitignored due to size. To share:
 - Or upload as GitHub Release assets
 - Or share via cloud storage (Google Drive, S3, HuggingFace Hub)
 
+## Using Your Own Dataset
+
+The pipeline expects a CSV with battery cycle data. Required columns:
+
+```csv
+battery_id,cycle,ambient_temp,capacity,n_measurements,duration,voltage_mean,voltage_min,voltage_max,current_mean,current_min,current_max,temp_mean,temp_min,temp_max
+B001,1,25,1.1,100,3600,3.7,3.5,3.9,1.0,0.8,1.2,30,28,32
+```
+
+### Steps:
+
+1. **Place your data** at `data/raw/your_battery_data.csv`
+
+2. **Modify `src/data_preprocessing.py`** - replace `load_nasa_cycle_summary()`:
+
+```python
+def load_nasa_cycle_summary() -> pd.DataFrame:
+    YOUR_DATA_PATH = Path("data/raw/your_battery_data.csv")
+    df = pd.read_csv(YOUR_DATA_PATH)
+    df.columns = df.columns.str.strip().str.lower().str.replace(' ', '_')
+    
+    # Validate required columns
+    required = ['battery_id', 'cycle', 'capacity', 'ambient_temp',
+                'voltage_mean', 'voltage_min', 'voltage_max',
+                'current_mean', 'current_min', 'current_max',
+                'temp_mean', 'temp_min', 'temp_max']
+    missing = [c for c in required if c not in df.columns]
+    if missing:
+        raise ValueError(f"Missing required columns: {missing}")
+    
+    print(f"Loaded {len(df)} rows, {df['battery_id'].nunique()} batteries")
+    return df
+```
+
+3. **Run pipeline**:
+```bash
+python run.py all
+```
+
+### Requirements:
+- At least 20 cycles per battery
+- Capacity must decrease over cycles (for SOH/RUL calculation)
+- Some batteries should reach ~70% SOH (for valid RUL targets)
+- If columns differ, rename them in the loader before validation
+
 ## License
 
 MIT License - feel free to use for research and commercial purposes.
