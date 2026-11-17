@@ -65,6 +65,7 @@ def main():
         help="Pipeline stage to run"
     )
     parser.add_argument("--dashboard-only", action="store_true", help="Launch dashboard only")
+    parser.add_argument("--use-synthetic", action="store_true", help="Use synthetic data (explicitly enabled) instead of real NASA data")
     
     args = parser.parse_args()
     
@@ -74,10 +75,17 @@ def main():
     
     if args.stage == "all" or args.stage == "preprocess":
         print("\n🔄 Stage 1: Data Preprocessing")
-        if not run_script("data_preprocessing.py"):
-            print("❌ Preprocessing failed!")
+        # Import and run with use_synthetic flag
+        import sys
+        sys.path.insert(0, str(SRC_DIR))
+        from data_preprocessing import main as preprocess_main
+        try:
+            preprocess_main(use_synthetic=args.use_synthetic)
+            print("✅ Preprocessing complete!")
+        except FileNotFoundError as e:
+            print(f"❌ Preprocessing failed: {e}")
+            print("   Use --use-synthetic flag to generate synthetic data")
             return
-        print("✅ Preprocessing complete!")
     
     if args.stage == "all" or args.stage == "features":
         print("\n🔄 Stage 2: Feature Engineering")

@@ -53,6 +53,7 @@ def compute_rul(df: pd.DataFrame, eol_threshold: float = 70.0, min_cycles: int =
     Only computes for batteries where EOL is observed or can be reasonably extrapolated.
     Filters out batteries with too few cycles.
     Returns both RUL and a flag indicating whether EOL was observed.
+    Separates observed EOL from extrapolated EOL for proper label handling.
     """
     df = df.copy()
     
@@ -64,6 +65,7 @@ def compute_rul(df: pd.DataFrame, eol_threshold: float = 70.0, min_cycles: int =
     
     # For each battery, find the cycle where SOH crosses EOL threshold
     eol_cycles = {}
+    eol_observed = {}
     for bid in df['battery_id'].unique():
         battery_data = df[df['battery_id'] == bid].sort_values('cycle')
         soh_values = battery_data['soh'].values
@@ -73,6 +75,7 @@ def compute_rul(df: pd.DataFrame, eol_threshold: float = 70.0, min_cycles: int =
         below_threshold = np.where(soh_values <= eol_threshold)[0]
         if len(below_threshold) > 0:
             eol_cycle = cycles[below_threshold[0]]
+            eol_observed[bid] = True
         else:
             # Extrapolate based on current degradation rate
             last_soh = soh_values[-1]
@@ -83,6 +86,7 @@ def compute_rul(df: pd.DataFrame, eol_threshold: float = 70.0, min_cycles: int =
                 eol_cycle = last_cycle + int(cycles_to_eol)
             else:
                 eol_cycle = last_cycle + 1000  # Arbitrary large number
+            eol_observed[bid] = False
         
         eol_cycles[bid] = eol_cycle
     
@@ -94,11 +98,10 @@ def compute_rul(df: pd.DataFrame, eol_threshold: float = 70.0, min_cycles: int =
     df['rul'] = df['rul'].clip(lower=0)  # No negative RUL
     
     # Mark whether EOL was observed in data
-    observed_eol = {}
-    for bid in df['battery_id'].unique():
-        battery_data = df[df['battery_id'] == bid]
-        observed_eol[bid] = (battery_data['soh'] <= eol_threshold).any()
-    df['eol_observed'] = df['battery_id'].map(observed_eol)
+    df['eol_observed'] = df['battery_id'].map(eol_observed)
+    
+    # Add RUL flag for censored data (1 = observed EOL, 0 = extrapolated)
+    df['eol_observed_flag'] = df['eol_observed'].astype(int)
     
     return df
 
@@ -137,15 +140,20 @@ def compute_degradation_severity(df: pd.DataFrame) -> pd.DataFrame:
     return df, {'normal_thresh': NORMAL_THRESH, 'accelerated_thresh': ACCELERATED_THRESH}
 
 
-def compute_failure_risk(df: pd.DataFrame) -> pd.DataFrame:
+def compute_failure_risk(df: pd.DataFrame, prediction_horizon: int = 20) -> pd.DataFrame:
     """
     Classify failure risk into Low, Medium, High.
-    Uses ONLY current/observable features (no retrospective RUL or full-lifetime severity).
-    Uses FIXED thresholds (no dataset-dependent quantiles) to prevent leakage.
-    Returns both the risk score (for reference) and the encoded label.
+    Two separate outputs:
+    1. Rule-based current condition risk (baseline)
+    2. Future failure prediction target (ML target)
     """
     df = df.copy()
     
+    # ============================================================
+    # OUTPUT 1: Rule-based current condition risk (baseline)
+    # Uses ONLY current/observable features (no retrospective RUL or full-lifetime severity)
+    # Uses FIXED thresholds (no dataset-dependent quantiles) to prevent leakage.
+    # ============================================================
     # Risk factors based on CURRENT observable state only:
     # 1. Current SOH (lower = higher risk) - observable at current cycle
     # 2. Current degradation rate (cycle_degradation_pct) - observable trend
@@ -195,11 +203,38 @@ def compute_failure_risk(df: pd.DataFrame) -> pd.DataFrame:
         lambda s: 'Low' if s <= 0.30 else ('Medium' if s <= 0.65 else 'High')
     )
     
-    # Numeric encoding
+    # Numeric encoding for rule-based risk
     risk_map = {'Low': 0, 'Medium': 1, 'High': 2}
     df['failure_risk_encoded'] = df['failure_risk'].map(risk_map)
     
-    return df, {'low_thresh': 0.30, 'high_thresh': 0.65}
+    # ============================================================
+    # OUTPUT 2: Future failure prediction target (independent ML target)
+    # Predict whether battery reaches failure condition within prediction_horizon cycles
+    # This is an INDEPENDENT target, not derived from the rule-based score
+    # ============================================================
+    # Define failure condition: SOH drops below 70% OR degradation rate exceeds critical threshold
+    # Within the next `prediction_horizon` cycles
+    df['future_failure'] = 0
+    df['future_failure_encoded'] = 0
+    
+    for bid in df['battery_id'].unique():
+        battery_data = df[df['battery_id'] == bid].sort_values('cycle')
+        soh_values = battery_data['soh'].values
+        cycles = battery_data['cycle'].values
+        deg_values = battery_data['cycle_degradation_pct'].abs().values
+        
+        for i, (soh, deg) in enumerate(zip(soh_values, deg_values)):
+            # Check future cycles within prediction horizon
+            future_mask = (cycles > cycles[i]) & (cycles <= cycles[i] + prediction_horizon)
+            if future_mask.any():
+                future_soh = soh_values[future_mask]
+                future_deg = deg_values[future_mask]
+                # Failure condition: SOH < 70% OR degradation > 0.3% (critical)
+                if (future_soh < 70).any() or (future_deg > 0.3).any():
+                    df.loc[battery_data.index[i], 'future_failure'] = 1
+                    df.loc[battery_data.index[i], 'future_failure_encoded'] = 1
+    
+    return df, {'low_thresh': 0.30, 'high_thresh': 0.65, 'prediction_horizon': prediction_horizon}
 
 
 def engineer_statistical_features(df: pd.DataFrame) -> pd.DataFrame:
@@ -234,19 +269,20 @@ def engineer_historical_features(df: pd.DataFrame, windows: List[int] = [3, 5, 1
     """
     Create historical features: rolling statistics, previous cycle values, cycle-to-cycle deltas.
     Uses ONLY past data (shift by 1) to prevent leakage.
-    Excludes target-derived features (SOH, capacity, RUL) to prevent leakage.
+    Uses a strict ALLOWLIST of permitted input features (raw sensor measurements only).
     """
     df = df.copy()
     df = df.sort_values(['battery_id', 'cycle']).reset_index(drop=True)
     
-    # Features to compute rolling stats for - ONLY raw sensor data
-    # Excluded: capacity, soh, rul, capacity_retention, capacity_fade, cycle_degradation_pct, soh_*, capacity_*, rul_*
-    feature_cols = [
+    # STRICT ALLOWLIST: Only raw sensor measurements available at prediction time
+    # Excludes ALL target-derived features (SOH, capacity, RUL, degradation, risk scores)
+    allowlist_cols = [
         'voltage_mean', 'voltage_min', 'voltage_max',
-        'current_mean', 'temp_mean', 'temp_max', 'duration',
-        'ir_proxy' if 'ir_proxy' in df.columns else 'voltage_mean'
+        'current_mean', 'current_min', 'current_max',
+        'temp_mean', 'temp_min', 'temp_max', 'ambient_temp',
+        'duration',
     ]
-    feature_cols = [c for c in feature_cols if c in df.columns]
+    feature_cols = [c for c in allowlist_cols if c in df.columns]
     
     for window in windows:
         for col in feature_cols:
@@ -312,13 +348,76 @@ def engineer_cycle_features(df: pd.DataFrame) -> pd.DataFrame:
 def select_features(df: pd.DataFrame, target_cols: List[str]) -> Tuple[pd.DataFrame, List[str]]:
     """
     Select final feature set for modeling.
+    Uses a strict ALLOWLIST of permitted features (raw sensor data + derived historical features only).
+    Excludes ALL target-related columns and any features derived from targets.
     Returns feature matrix X and list of feature names.
     """
-    # Exclude target columns and identifier columns
-    exclude_cols = set(target_cols + [
-        'battery_id', 'cycle', 'initial_capacity', 'eol_cycle', 'eol_observed',
+    # STRICT ALLOWLIST: Only features that are legitimate measurements at prediction time
+    # This includes:
+    # - Raw sensor measurements: voltage, current, temp, ambient_temp, duration
+    # - Statistical features derived from raw sensors: *_range, *_cv
+    # - Power/energy features derived from raw sensors: power_mean, energy_throughput
+    # - Internal resistance proxy: ir_proxy
+    # - Historical features: rolling stats, lags, deltas on raw sensors only
+    # - Cycle features: cycle, cycle_squared, cycle_cubed, cycle_log
+    
+    # Build the allowlist by finding all columns that match permitted patterns
+    all_cols = set(df.columns)
+    
+    # Permitted patterns for allowlist
+    permitted_patterns = [
+        # Raw measurements
+        'voltage_', 'current_', 'temp_', 'ambient_temp', 'duration',
+        # Derived statistical (from raw sensors only)
+        'voltage_range', 'voltage_cv',
+        'current_range', 'current_cv',
+        'temp_range', 'temp_rise', 'temp_cv',
+        # Power/energy (from raw sensors only)
+        'power_mean', 'energy_throughput',
+        # Internal resistance proxy (from raw sensors only)
+        'ir_proxy',
+        # Historical features (rolling/lag/delta on raw sensors only)
+        '_roll_mean_', '_roll_std_', '_roll_min_', '_roll_max_',
+        '_lag1', '_lag2',
+        '_delta1', '_delta2',
+        # Cycle features (time-based, not future-dependent)
+        'cycle_squared', 'cycle_cubed', 'cycle_log',
+        'cycles_per_day_est',
+    ]
+    
+    # Also include base cycle column
+    permitted_base = ['cycle']
+    
+    # Build allowlist by matching patterns
+    allowlist = set()
+    for col in all_cols:
+        if col in permitted_base:
+            allowlist.add(col)
+        else:
+            for pattern in permitted_patterns:
+                if pattern in col:
+                    allowlist.add(col)
+                    break
+    
+    # Also explicitly include raw measurement columns if they exist
+    raw_measurements = [
+        'voltage_mean', 'voltage_min', 'voltage_max',
+        'current_mean', 'current_min', 'current_max',
+        'temp_mean', 'temp_min', 'temp_max', 'ambient_temp',
+        'duration',
+    ]
+    for col in raw_measurements:
+        if col in all_cols:
+            allowlist.add(col)
+    
+    # Explicitly exclude target columns and any columns that leak target information
+    # Even if they match patterns, these are forbidden
+    forbidden = set(target_cols + [
+        'battery_id', 'cycle',
+        'initial_capacity', 'eol_cycle', 'eol_observed', 'eol_observed_flag',
         'degradation_severity', 'failure_risk',  # String labels
         'degradation_severity_encoded', 'failure_risk_encoded',  # Encoded labels
+        'future_failure', 'future_failure_encoded',  # New future failure target
         # Leaky features that directly determine or are used to compute targets:
         'failure_risk_score',  # Used to compute failure_risk label - MAJOR LEAKAGE
         'soh', 'capacity_retention', 'capacity_fade',  # Direct SOH components
@@ -329,7 +428,8 @@ def select_features(df: pd.DataFrame, target_cols: List[str]) -> Tuple[pd.DataFr
         'power_mean', 'energy_throughput', 'ir_proxy', 'voltage_cv', 'temp_cv',  # Derived from leaked features
     ])
     
-    feature_cols = [c for c in df.columns if c not in exclude_cols and df[c].dtype in ['float64', 'int64', 'float32', 'int32']]
+    # Final feature columns = allowlist - forbidden
+    feature_cols = sorted([c for c in allowlist if c not in forbidden and df[c].dtype in ['float64', 'int64', 'float32', 'int32']])
     
     X = df[feature_cols].copy()
     
@@ -372,9 +472,10 @@ def main():
     
     # Step 4: Failure risk classification
     print("4. Computing failure risk...")
-    df, risk_thresholds = compute_failure_risk(df)
+    df, risk_thresholds = compute_failure_risk(df, prediction_horizon=20)
     print(f"   Risk thresholds: Low<={risk_thresholds['low_thresh']:.4f}, High<={risk_thresholds['high_thresh']:.4f}")
-    print(f"   Distribution: {df['failure_risk'].value_counts().to_dict()}")
+    print(f"   Rule-based Risk Distribution: {df['failure_risk'].value_counts().to_dict()}")
+    print(f"   Future Failure Distribution: {df['future_failure'].value_counts().to_dict()}")
     
     # Step 5: Statistical features
     print("5. Engineering statistical features...")
@@ -390,7 +491,7 @@ def main():
     
     # Step 8: Feature selection
     print("8. Selecting final feature set...")
-    target_cols = ['soh', 'rul', 'degradation_severity_encoded', 'failure_risk_encoded']
+    target_cols = ['soh', 'rul', 'degradation_severity_encoded', 'failure_risk_encoded', 'future_failure_encoded']
     X, feature_names = select_features(df, target_cols)
     print(f"   Selected {len(feature_names)} features")
     

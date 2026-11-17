@@ -115,8 +115,13 @@ def save_processed_data(df: pd.DataFrame, output_path: Path):
     print(f"Columns: {list(df.columns)}")
 
 
-def main():
-    """Main preprocessing pipeline using real NASA data."""
+def main(use_synthetic: bool = False):
+    """Main preprocessing pipeline using real NASA data.
+    
+    Args:
+        use_synthetic: If True, generate synthetic data. 
+                       If False (default), load real NASA data or raise error.
+    """
     print("=" * 60)
     print("NASA Battery Dataset - Data Preprocessing Pipeline (Real Data)")
     print("=" * 60)
@@ -134,10 +139,15 @@ def main():
     # Load real NASA data
     if CYCLE_SUMMARY_PATH.exists():
         df = load_nasa_cycle_summary()
-    else:
-        print(f"NASA data not found at {CYCLE_SUMMARY_PATH}")
-        print("Falling back to synthetic data...")
+    elif use_synthetic:
+        print("Real NASA data not found. Generating synthetic data (explicitly enabled)...")
         df = create_synthetic_data()
+    else:
+        raise FileNotFoundError(
+            f"NASA data not found at {CYCLE_SUMMARY_PATH}. "
+            f"Set use_synthetic=True to generate synthetic data, "
+            f"or place real NASA data at {CYCLE_SUMMARY_PATH}"
+        )
     
     # Validate and clean
     df = validate_and_clean(df)

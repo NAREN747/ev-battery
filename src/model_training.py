@@ -19,10 +19,11 @@ from sklearn.feature_selection import SelectKBest, f_regression, f_classif, mutu
 from sklearn.metrics import (
     mean_absolute_error, mean_squared_error, r2_score,
     accuracy_score, precision_score, recall_score, f1_score,
-    confusion_matrix, classification_report
+    confusion_matrix, classification_report, balanced_accuracy_score
 )
 from sklearn.linear_model import LinearRegression, LogisticRegression, Ridge, Lasso, ElasticNet
-from sklearn.ensemble import RandomForestRegressor, RandomForestClassifier, GradientBoostingRegressor, GradientBoostingClassifier
+from sklearn.ensemble import RandomForestRegressor, RandomForestClassifier, GradientBoostingRegressor, GradientBoostingClassifier, ExtraTreesRegressor, ExtraTreesClassifier
+from sklearn.ensemble import HistGradientBoostingRegressor, HistGradientBoostingClassifier
 from sklearn.svm import SVR, SVC
 from sklearn.neural_network import MLPRegressor, MLPClassifier
 
@@ -104,7 +105,9 @@ def get_regression_models():
         'Lasso': Lasso(alpha=0.01, random_state=42, max_iter=5000),
         'ElasticNet': ElasticNet(alpha=0.01, l1_ratio=0.5, random_state=42, max_iter=5000),
         'RandomForest': RandomForestRegressor(n_estimators=200, max_depth=15, min_samples_split=5, random_state=42, n_jobs=-1),
+        'ExtraTrees': ExtraTreesRegressor(n_estimators=200, max_depth=15, min_samples_split=5, random_state=42, n_jobs=-1),
         'GradientBoosting': GradientBoostingRegressor(n_estimators=200, max_depth=5, learning_rate=0.1, random_state=42),
+        'HistGradientBoosting': HistGradientBoostingRegressor(max_iter=200, max_depth=5, learning_rate=0.1, random_state=42),
         'SVR': SVR(kernel='rbf', C=1.0, gamma='scale'),
         'MLP': MLPRegressor(hidden_layer_sizes=(128, 64), max_iter=500, random_state=42, early_stopping=True),
     }
@@ -115,7 +118,9 @@ def get_classification_models():
     return {
         'LogisticRegression': LogisticRegression(max_iter=1000, random_state=42, class_weight='balanced'),
         'RandomForest': RandomForestClassifier(n_estimators=200, max_depth=15, min_samples_split=5, random_state=42, n_jobs=-1, class_weight='balanced'),
+        'ExtraTrees': ExtraTreesClassifier(n_estimators=200, max_depth=15, min_samples_split=5, random_state=42, n_jobs=-1, class_weight='balanced'),
         'GradientBoosting': GradientBoostingClassifier(n_estimators=200, max_depth=5, learning_rate=0.1, random_state=42),
+        'HistGradientBoosting': HistGradientBoostingClassifier(max_iter=200, max_depth=5, learning_rate=0.1, random_state=42),
         'SVC': SVC(kernel='rbf', C=1.0, gamma='scale', probability=True, random_state=42, class_weight='balanced'),
         'MLP': MLPClassifier(hidden_layer_sizes=(128, 64), max_iter=500, random_state=42, early_stopping=True),
     }
@@ -131,12 +136,16 @@ def evaluate_regression(y_true: np.ndarray, y_pred: np.ndarray) -> Dict[str, flo
 
 
 def evaluate_classification(y_true: np.ndarray, y_pred: np.ndarray, average: str = 'weighted') -> Dict[str, float]:
-    """Evaluate classification metrics."""
+    """Evaluate classification metrics with both weighted and macro averages."""
     return {
         'Accuracy': accuracy_score(y_true, y_pred),
-        'Precision': precision_score(y_true, y_pred, average=average, zero_division=0),
-        'Recall': recall_score(y_true, y_pred, average=average, zero_division=0),
-        'F1': f1_score(y_true, y_pred, average=average, zero_division=0),
+        'Balanced_Accuracy': balanced_accuracy_score(y_true, y_pred),
+        'Precision_weighted': precision_score(y_true, y_pred, average='weighted', zero_division=0),
+        'Precision_macro': precision_score(y_true, y_pred, average='macro', zero_division=0),
+        'Recall_weighted': recall_score(y_true, y_pred, average='weighted', zero_division=0),
+        'Recall_macro': recall_score(y_true, y_pred, average='macro', zero_division=0),
+        'F1_weighted': f1_score(y_true, y_pred, average='weighted', zero_division=0),
+        'F1_macro': f1_score(y_true, y_pred, average='macro', zero_division=0),
     }
 
 
@@ -282,7 +291,9 @@ def train_all_models(X, y, groups, train_idx, val_idx, test_idx):
 
 
 def select_best_models(results: Dict) -> Dict[str, str]:
-    """Select best model for each target based on validation metrics."""
+    """Select best model for each target based on validation metrics.
+    Uses macro F1 for classification (better for imbalanced classes), MAE for regression.
+    """
     best_models = {}
     
     for target_name, target_results in results.items():
@@ -296,7 +307,8 @@ def select_best_models(results: Dict) -> Dict[str, str]:
                 continue
             
             if is_classification:
-                score = result['val_metrics']['F1']
+                # Use macro F1 as primary metric for classification
+                score = result['val_metrics']['F1_macro']
                 if score > best_score:
                     best_score = score
                     best_model_name = model_name
@@ -308,7 +320,8 @@ def select_best_models(results: Dict) -> Dict[str, str]:
         
         if best_model_name:
             best_models[target_name] = best_model_name
-            print(f"Best model for {target_name}: {best_model_name} ({'F1' if is_classification else 'MAE'} = {best_score:.4f})")
+            metric_name = 'F1_macro' if is_classification else 'MAE'
+            print(f"Best model for {target_name}: {best_model_name} ({metric_name} = {best_score:.4f})")
     
     return best_models
 
@@ -416,15 +429,18 @@ def plot_results(results: Dict, enriched: pd.DataFrame, test_idx: np.ndarray):
         print(f"  Saved plot to {plot_path}")
 
 
-def plot_degradation_curves(enriched: pd.DataFrame, test_idx: np.ndarray, results: Dict):
-    """Plot degradation curves with predictions for test batteries."""
+def plot_degradation_curves(enriched: pd.DataFrame, test_idx: np.ndarray, results: Dict, best_models: Dict[str, str]):
+    """Plot degradation curves with predictions for test batteries using best models."""
     print("Generating degradation curve plots...")
     
     test_enriched = enriched.iloc[test_idx].copy()
     
-    # Get predictions for SOH and RUL
-    soh_pred = results.get('soh', {}).get('RandomForest', {}).get('test_predictions', None)
-    rul_pred = results.get('rul', {}).get('RandomForest', {}).get('test_predictions', None)
+    # Get predictions for SOH and RUL using BEST models (not hardcoded)
+    soh_best = best_models.get('soh', 'RandomForest')
+    rul_best = best_models.get('rul', 'RandomForest')
+    
+    soh_pred = results.get('soh', {}).get(soh_best, {}).get('test_predictions', None)
+    rul_pred = results.get('rul', {}).get(rul_best, {}).get('test_predictions', None)
     
     if soh_pred is not None:
         test_enriched['soh_pred'] = soh_pred
@@ -444,7 +460,7 @@ def plot_degradation_curves(enriched: pd.DataFrame, test_idx: np.ndarray, result
         ax = axes[idx, 0]
         ax.plot(battery_data['cycle'], battery_data['soh'], 'b-', label='Actual SOH', linewidth=2)
         if 'soh_pred' in battery_data.columns:
-            ax.plot(battery_data['cycle'], battery_data['soh_pred'], 'r--', label='Predicted SOH', linewidth=2)
+            ax.plot(battery_data['cycle'], battery_data['soh_pred'], 'r--', label=f'Predicted SOH ({soh_best})', linewidth=2)
         ax.axhline(y=70, color='k', linestyle=':', label='EOL Threshold (70%)')
         ax.set_xlabel('Cycle')
         ax.set_ylabel('SOH (%)')
@@ -456,7 +472,7 @@ def plot_degradation_curves(enriched: pd.DataFrame, test_idx: np.ndarray, result
         ax = axes[idx, 1]
         ax.plot(battery_data['cycle'], battery_data['rul'], 'g-', label='Actual RUL', linewidth=2)
         if 'rul_pred' in battery_data.columns:
-            ax.plot(battery_data['cycle'], battery_data['rul_pred'], 'r--', label='Predicted RUL', linewidth=2)
+            ax.plot(battery_data['cycle'], battery_data['rul_pred'], 'r--', label=f'Predicted RUL ({rul_best})', linewidth=2)
         ax.set_xlabel('Cycle')
         ax.set_ylabel('RUL (cycles)')
         ax.set_title(f'{bid} - Remaining Useful Life')
@@ -549,7 +565,7 @@ def main():
     
     # Generate plots
     plot_results(results, enriched, test_idx)
-    plot_degradation_curves(enriched, test_idx, results)
+    plot_degradation_curves(enriched, test_idx, results, best_models)
     
     # Generate report
     report = generate_model_report(results, best_models)
