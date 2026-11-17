@@ -267,15 +267,14 @@ def train_all_models(X, y, groups, train_idx, val_idx, test_idx):
                             model, X_train, y_train, groups_train, cv=5, task_type=task_type
                         )
                         result['cv_results'] = cv_results
-                
-                print(f"    Val {task_type}: {result['val_metrics']}")
-                print(f"    Test {task_type}: {result['test_metrics']}")
-                if task_type == 'regression':
-                    print(f"    CV MAE: {cv_results['cv_mae_mean']:.4f} ± {cv_results['cv_mae_std']:.4f}")
-                else:
-                    print(f"    CV F1: {cv_results['cv_f1_mean']:.4f} ± {cv_results['cv_f1_std']:.4f}")
-            
-            target_results[model_name] = result
+                    
+                    print(f"    Val {task_type}: {result['val_metrics']}")
+                    print(f"    Test {task_type}: {result['test_metrics']}")
+                    if task_type == 'regression':
+                        print(f"    CV MAE: {cv_results['cv_mae_mean']:.4f} ± {cv_results['cv_mae_std']:.4f}")
+                    else:
+                        print(f"    CV F1: {cv_results['cv_f1_mean']:.4f} ± {cv_results['cv_f1_std']:.4f}")
+                    target_results[model_name] = result
         
         results[target_name] = target_results
     
