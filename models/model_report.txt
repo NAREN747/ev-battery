@@ -7,85 +7,85 @@ EV BATTERY HEALTH MONITORING - MODEL EVALUATION REPORT
 TARGET: soh | BEST MODEL: MLP
 ================================================================================
   LinearRegression:
-    Validation - MAE: 16.9389, RMSE: 18.4169, R2: -0.3182
-    CV MAE: 5.9425 ± 1.8585
-    Test       - MAE: 3.3318, RMSE: 4.2450, R2: 0.7201
+    Validation - MAE: 16.9196, RMSE: 18.3853, R2: -0.3137
+    CV MAE: 5.9299 ± 1.8587
+    Test       - MAE: 3.3115, RMSE: 4.2151, R2: 0.7240
   Ridge:
-    Validation - MAE: 17.5789, RMSE: 19.0671, R2: -0.4129
-    CV MAE: 5.9241 ± 1.9918
-    Test       - MAE: 3.1847, RMSE: 4.0739, R2: 0.7422
+    Validation - MAE: 17.5697, RMSE: 19.0614, R2: -0.4121
+    CV MAE: 5.9197 ± 1.9915
+    Test       - MAE: 3.1887, RMSE: 4.0749, R2: 0.7421
   Lasso:
-    Validation - MAE: 17.4277, RMSE: 18.9373, R2: -0.3937
-    CV MAE: 5.8699 ± 2.0472
-    Test       - MAE: 3.1262, RMSE: 3.9773, R2: 0.7543
+    Validation - MAE: 17.4053, RMSE: 18.9188, R2: -0.3910
+    CV MAE: 5.8612 ± 2.0337
+    Test       - MAE: 3.1229, RMSE: 3.9718, R2: 0.7550
   ElasticNet:
-    Validation - MAE: 18.9384, RMSE: 20.5011, R2: -0.6334
-    CV MAE: 6.1997 ± 2.2130
-    Test       - MAE: 3.1084, RMSE: 3.9821, R2: 0.7537
+    Validation - MAE: 18.9098, RMSE: 20.4791, R2: -0.6299
+    CV MAE: 6.1945 ± 2.2066
+    Test       - MAE: 3.1129, RMSE: 3.9878, R2: 0.7530
   RandomForest:
-    Validation - MAE: 22.2369, RMSE: 24.0292, R2: -1.2440
-    CV MAE: 5.1262 ± 1.0895
-    Test       - MAE: 2.7332, RMSE: 3.4603, R2: 0.8140
+    Validation - MAE: 22.2158, RMSE: 24.0021, R2: -1.2389
+    CV MAE: 5.1143 ± 1.0890
+    Test       - MAE: 2.7382, RMSE: 3.4698, R2: 0.8130
   GradientBoosting:
-    Validation - MAE: 21.9694, RMSE: 23.6692, R2: -1.1773
-    CV MAE: 5.2995 ± 1.1464
-    Test       - MAE: 2.7698, RMSE: 3.6427, R2: 0.7939
+    Validation - MAE: 21.9835, RMSE: 23.6873, R2: -1.1806
+    CV MAE: 5.3566 ± 1.2052
+    Test       - MAE: 2.7225, RMSE: 3.5781, R2: 0.8011
   SVR:
-    Validation - MAE: 26.3867, RMSE: 29.4391, R2: -2.3682
-    CV MAE: 6.1761 ± 2.7081
-    Test       - MAE: 6.5464, RMSE: 8.2226, R2: -0.0502
+    Validation - MAE: 26.4063, RMSE: 29.4825, R2: -2.3781
+    CV MAE: 6.2137 ± 2.6962
+    Test       - MAE: 6.6175, RMSE: 8.2977, R2: -0.0695
   MLP:
-    Validation - MAE: 15.9985, RMSE: 19.4538, R2: -0.4708
-    CV MAE: 14.9978 ± 1.8564
-    Test       - MAE: 20.1225, RMSE: 26.9862, R2: -10.3122
+    Validation - MAE: 12.0927, RMSE: 15.1427, R2: 0.1088
+    CV MAE: 27.1873 ± 25.6368
+    Test       - MAE: 17.7795, RMSE: 24.2758, R2: -8.1540
 
 ================================================================================
-TARGET: rul | BEST MODEL: GradientBoosting
+TARGET: rul | BEST MODEL: MLP
 ================================================================================
   LinearRegression:
-    Validation - MAE: 136.9038, RMSE: 168.0717, R2: -107.4558
-    CV MAE: 210.1188 ± 75.0366
-    Test       - MAE: 92.5388, RMSE: 115.3868, R2: -2.6224
+    Validation - MAE: 136.6796, RMSE: 167.8739, R2: -107.2007
+    CV MAE: 208.7619 ± 75.8717
+    Test       - MAE: 92.5947, RMSE: 115.3253, R2: -2.6185
   Ridge:
-    Validation - MAE: 132.5847, RMSE: 164.3241, R2: -102.6732
-    CV MAE: 209.3936 ± 79.8415
-    Test       - MAE: 83.5417, RMSE: 102.3256, R2: -1.8487
+    Validation - MAE: 132.6096, RMSE: 164.3773, R2: -102.7404
+    CV MAE: 209.2260 ± 80.0144
+    Test       - MAE: 83.4711, RMSE: 102.2505, R2: -1.8446
   Lasso:
-    Validation - MAE: 132.5018, RMSE: 164.5865, R2: -103.0046
-    CV MAE: 211.9521 ± 77.6764
-    Test       - MAE: 87.8203, RMSE: 109.2626, R2: -2.2481
+    Validation - MAE: 132.4548, RMSE: 164.5209, R2: -102.9217
+    CV MAE: 211.3497 ± 78.1233
+    Test       - MAE: 87.8210, RMSE: 109.2621, R2: -2.2481
   ElasticNet:
-    Validation - MAE: 125.5747, RMSE: 157.4169, R2: -94.1408
-    CV MAE: 218.5251 ± 83.4688
-    Test       - MAE: 81.1909, RMSE: 99.7491, R2: -1.7071
+    Validation - MAE: 125.6123, RMSE: 157.4941, R2: -94.2341
+    CV MAE: 218.2758 ± 83.6448
+    Test       - MAE: 81.0549, RMSE: 99.5765, R2: -1.6977
   RandomForest:
-    Validation - MAE: 125.2437, RMSE: 177.3181, R2: -119.7175
-    CV MAE: 233.7975 ± 91.2834
-    Test       - MAE: 95.7329, RMSE: 122.1498, R2: -3.0595
+    Validation - MAE: 125.2394, RMSE: 176.7639, R2: -118.9640
+    CV MAE: 232.9847 ± 91.2993
+    Test       - MAE: 95.9865, RMSE: 122.2929, R2: -3.0690
   GradientBoosting:
-    Validation - MAE: 121.2897, RMSE: 177.8687, R2: -120.4683
-    CV MAE: 228.6682 ± 79.2405
-    Test       - MAE: 92.7598, RMSE: 122.7083, R2: -3.0967
+    Validation - MAE: 121.6888, RMSE: 177.4908, R2: -119.9527
+    CV MAE: 228.2840 ± 79.7960
+    Test       - MAE: 93.0293, RMSE: 123.1914, R2: -3.1290
   SVR:
-    Validation - MAE: 212.5982, RMSE: 213.0626, R2: -173.2924
-    CV MAE: 225.2327 ± 85.9565
-    Test       - MAE: 101.6745, RMSE: 117.1961, R2: -2.7369
+    Validation - MAE: 212.5989, RMSE: 213.0646, R2: -173.2957
+    CV MAE: 225.2305 ± 85.9548
+    Test       - MAE: 101.6781, RMSE: 117.2104, R2: -2.7378
   MLP:
-    Validation - MAE: 149.9933, RMSE: 204.2134, R2: -159.1152
-    CV MAE: 234.4020 ± 90.6556
-    Test       - MAE: 135.3690, RMSE: 179.4136, R2: -7.7578
+    Validation - MAE: 120.3616, RMSE: 179.1251, R2: -122.1904
+    CV MAE: 178.2595 ± 78.5049
+    Test       - MAE: 128.7387, RMSE: 172.3289, R2: -7.0798
 
 ================================================================================
 TARGET: degradation_severity_encoded | BEST MODEL: GradientBoosting
 ================================================================================
   LogisticRegression:
-    Validation - Acc: 0.3550, Prec: 0.4380, Rec: 0.3550, F1: 0.3491
-    CV F1: 0.4338 ± 0.0254
-    Test       - Acc: 0.3900, F1: 0.4168
+    Validation - Acc: 0.3750, Prec: 0.4645, Rec: 0.3750, F1: 0.3762
+    CV F1: 0.4349 ± 0.0236
+    Test       - Acc: 0.3800, F1: 0.4089
   RandomForest:
-    Validation - Acc: 0.4650, Prec: 0.9267, Rec: 0.4650, F1: 0.4191
-    CV F1: 0.9088 ± 0.0148
-    Test       - Acc: 0.8925, F1: 0.8825
+    Validation - Acc: 0.4600, Prec: 0.9266, Rec: 0.4600, F1: 0.4096
+    CV F1: 0.9109 ± 0.0205
+    Test       - Acc: 0.8950, F1: 0.8859
   GradientBoosting:
     Validation - Acc: 1.0000, Prec: 1.0000, Rec: 1.0000, F1: 1.0000
     CV F1: 0.9980 ± 0.0040
@@ -95,33 +95,33 @@ TARGET: degradation_severity_encoded | BEST MODEL: GradientBoosting
     CV F1: 0.5677 ± 0.0296
     Test       - Acc: 0.5900, F1: 0.5193
   MLP:
-    Validation - Acc: 0.3500, Prec: 0.3482, Rec: 0.3500, F1: 0.2032
-    CV F1: 0.5550 ± 0.0510
-    Test       - Acc: 0.6375, F1: 0.5149
+    Validation - Acc: 0.3500, Prec: 0.4178, Rec: 0.3500, F1: 0.2031
+    CV F1: 0.5582 ± 0.0632
+    Test       - Acc: 0.6325, F1: 0.5221
 
 ================================================================================
 TARGET: failure_risk_encoded | BEST MODEL: GradientBoosting
 ================================================================================
   LogisticRegression:
     Validation - Acc: 0.2950, Prec: 0.3432, Rec: 0.2950, F1: 0.2724
-    CV F1: 0.5545 ± 0.0291
-    Test       - Acc: 0.5350, F1: 0.5312
+    CV F1: 0.5499 ± 0.0279
+    Test       - Acc: 0.5350, F1: 0.5317
   RandomForest:
-    Validation - Acc: 0.8800, Prec: 0.8836, Rec: 0.8800, F1: 0.8810
-    CV F1: 0.9536 ± 0.0271
-    Test       - Acc: 0.9500, F1: 0.9501
+    Validation - Acc: 0.8500, Prec: 0.8662, Rec: 0.8500, F1: 0.8526
+    CV F1: 0.9565 ± 0.0255
+    Test       - Acc: 0.9625, F1: 0.9626
   GradientBoosting:
-    Validation - Acc: 0.9100, Prec: 0.9107, Rec: 0.9100, F1: 0.9103
-    CV F1: 0.9446 ± 0.0208
-    Test       - Acc: 0.9550, F1: 0.9550
+    Validation - Acc: 0.9050, Prec: 0.9063, Rec: 0.9050, F1: 0.9054
+    CV F1: 0.9456 ± 0.0209
+    Test       - Acc: 0.9525, F1: 0.9525
   SVC:
-    Validation - Acc: 0.3200, Prec: 0.3589, Rec: 0.3200, F1: 0.2506
-    CV F1: 0.5563 ± 0.0368
-    Test       - Acc: 0.5725, F1: 0.5609
+    Validation - Acc: 0.3250, Prec: 0.3687, Rec: 0.3250, F1: 0.2535
+    CV F1: 0.5567 ± 0.0359
+    Test       - Acc: 0.5825, F1: 0.5687
   MLP:
-    Validation - Acc: 0.4500, Prec: 0.5737, Rec: 0.4500, F1: 0.4283
-    CV F1: 0.5448 ± 0.0664
-    Test       - Acc: 0.6125, F1: 0.6027
+    Validation - Acc: 0.5150, Prec: 0.5831, Rec: 0.5150, F1: 0.5221
+    CV F1: 0.5270 ± 0.0619
+    Test       - Acc: 0.5375, F1: 0.5232
 
 ================================================================================
 NOTE: All splits are battery-wise (GroupShuffleSplit) to prevent data leakage.

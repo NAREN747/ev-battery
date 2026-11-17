@@ -322,11 +322,9 @@ def select_features(df: pd.DataFrame, target_cols: List[str]) -> Tuple[pd.DataFr
         'soh', 'capacity_retention', 'capacity_fade',  # Direct SOH components
         'rul',  # Direct RUL target
         'capacity',  # Used to compute SOH
+        'cycle_degradation', 'cycle_degradation_pct',  # Used to compute severity/risk
+        'temp_mean', 'voltage_mean',  # Used to compute failure_risk_score
     ])
-    
-    # Also exclude intermediate computation columns
-    intermediate_cols = [c for c in df.columns if any(x in c for x in ['_lag', '_delta', '_roll_'])]
-    # Actually keep these - they're engineered features
     
     feature_cols = [c for c in df.columns if c not in exclude_cols and df[c].dtype in ['float64', 'int64', 'float32', 'int32']]
     

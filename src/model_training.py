@@ -188,15 +188,21 @@ def train_and_evaluate_model(
 
 
 def run_cross_validation(model, X, y, groups, cv=5, task_type='regression'):
-    """Run group-wise cross-validation."""
+    """Run group-wise cross-validation with preprocessing inside CV loop."""
     gkf = GroupKFold(n_splits=cv)
+    
+    # Create pipeline with preprocessing inside CV
+    pipeline = Pipeline([
+        ('preprocessor', create_preprocessing_pipeline()),
+        ('model', model)
+    ])
     
     if task_type == 'regression':
         scoring = 'neg_mean_absolute_error'
     else:
         scoring = 'f1_weighted'
     
-    scores = cross_val_score(model, X, y, groups=groups, cv=gkf, scoring=scoring, n_jobs=-1)
+    scores = cross_val_score(pipeline, X, y, groups=groups, cv=gkf, scoring=scoring, n_jobs=-1)
     
     if task_type == 'regression':
         scores = -scores  # Convert negative MAE to positive
