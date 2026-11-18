@@ -77,11 +77,10 @@ def validate_and_clean(df: pd.DataFrame) -> pd.DataFrame:
     numeric_cols = df.select_dtypes(include=[np.number]).columns
     for col in numeric_cols:
         if df[col].isna().any():
-            # Forward fill within each battery, then backward fill
-            df[col] = df.groupby('battery_id')[col].transform(lambda x: x.ffill().bfill())
-            # If still NaN, fill with global median
-            if df[col].isna().any():
-                df[col] = df[col].fillna(df[col].median())
+            # Forward fill ONLY within each battery (no backward fill - uses future data)
+            df[col] = df.groupby('battery_id')[col].transform(lambda x: x.ffill())
+            # Leave remaining NaN for the training pipeline's imputer
+            # (imputer learns from training data only to prevent leakage)
     
     # Validate temperature ranges (should be reasonable for battery operation)
     temp_cols = ['ambient_temp', 'temp_mean', 'temp_min', 'temp_max']

@@ -192,7 +192,9 @@ def train_and_evaluate_model(
         return {
             'model_name': model_name,
             'status': 'failed',
-            'error': str(e)
+            'error': str(e),
+            'val_metrics': {},
+            'test_metrics': {}
         }
 
 
@@ -220,7 +222,7 @@ def run_cross_validation(model, X, y, groups, cv=5, task_type='regression'):
         return {'cv_f1_mean': scores.mean(), 'cv_f1_std': scores.std(), 'cv_scores': scores}
 
 
-def train_all_models(X, y, groups, train_idx, val_idx, test_idx):
+def train_all_models(X, y, groups, train_idx, val_idx, test_idx, enriched):
     """Train and evaluate all models for all targets."""
     
     # Split data
@@ -248,6 +250,79 @@ def train_all_models(X, y, groups, train_idx, val_idx, test_idx):
         y_val = y.iloc[val_idx][target_name].values
         y_test = y.iloc[test_idx][target_name].values
         
+        # For RUL, only train on batteries with observed EOL (eol_observed_flag == 1)
+        if target_name == 'rul':
+            # Get eol_observed_flag from enriched data
+            eol_observed_train = enriched.iloc[train_idx]['eol_observed_flag'].values
+            eol_observed_val = enriched.iloc[val_idx]['eol_observed_flag'].values
+            eol_observed_test = enriched.iloc[test_idx]['eol_observed_flag'].values
+            
+            # Filter to only observed EOL
+            train_mask = eol_observed_train == 1
+            val_mask = eol_observed_val == 1
+            test_mask = eol_observed_test == 1
+            
+            if train_mask.sum() > 0 and val_mask.sum() > 0:
+                X_train_rul = X_train_processed[train_mask]
+                y_train_rul = y_train[train_mask]
+                X_val_rul = X_val_processed[val_mask]
+                y_val_rul = y_val[val_mask]
+                
+                # For test, if no observed EOL, use all test data
+                if test_mask.sum() > 0:
+                    X_test_rul = X_test_processed[test_mask]
+                    y_test_rul = y_test[test_mask]
+                else:
+                    X_test_rul = X_test_processed
+                    y_test_rul = y_test
+                
+                print(f"  RUL training: Using {train_mask.sum()}/{len(y_train)} train, {val_mask.sum()}/{len(y_val)} val, {test_mask.sum() if test_mask.sum() > 0 else len(y_test)} test samples with observed EOL")
+            else:
+                print(f"  WARNING: Insufficient observed EOL in training/val data, falling back to all data")
+                X_train_rul = X_train_processed
+                y_train_rul = y_train
+                X_val_rul = X_val_processed
+                y_val_rul = y_val
+                X_test_rul = X_test_processed
+                y_test_rul = y_test
+        else:
+            X_train_rul = X_train_processed
+            y_train_rul = y_train
+            X_val_rul = X_val_processed
+            y_val_rul = y_val
+            X_test_rul = X_test_processed
+            y_test_rul = y_test
+        
+        # For future_failure, only train on samples with fully observed prediction windows
+        if target_name == 'future_failure_encoded':
+            # Get future_failure_observed from enriched data
+            ff_observed_train = enriched.iloc[train_idx]['future_failure_observed'].values
+            ff_observed_val = enriched.iloc[val_idx]['future_failure_observed'].values
+            ff_observed_test = enriched.iloc[test_idx]['future_failure_observed'].values
+            
+            # Filter to only fully observed windows
+            train_mask = ff_observed_train == 1
+            val_mask = ff_observed_val == 1
+            test_mask = ff_observed_test == 1
+            
+            if train_mask.sum() > 0:
+                X_train_rul = X_train_processed[train_mask]
+                y_train_rul = y_train[train_mask]
+                X_val_rul = X_val_processed[val_mask]
+                y_val_rul = y_val[val_mask]
+                X_test_rul = X_test_processed[test_mask]
+                y_test_rul = y_test[test_mask]
+                
+                print(f"  Future failure training: Using {train_mask.sum()}/{len(y_train)} train, {val_mask.sum()}/{len(y_val)} val, {test_mask.sum()}/{len(y_test)} test samples with full observation window")
+            else:
+                print(f"  WARNING: No fully observed windows in training data, falling back to all data")
+                X_train_rul = X_train_processed
+                y_train_rul = y_train
+                X_val_rul = X_val_processed
+                y_val_rul = y_val
+                X_test_rul = X_test_processed
+                y_test_rul = y_test
+        
         # Determine task type
         is_classification = 'encoded' in target_name or target_name in ['degradation_severity', 'failure_risk']
         
@@ -261,29 +336,40 @@ def train_all_models(X, y, groups, train_idx, val_idx, test_idx):
         target_results = {}
         
         for model_name, model in models.items():
-                    result = train_and_evaluate_model(
-                        model_name, model,
-                        X_train_processed, y_train,
-                        X_val_processed, y_val,
-                        X_test_processed, y_test,
-                        task_type
-                    )
+            result = train_and_evaluate_model(
+                model_name, model,
+                X_train_rul, y_train_rul,
+                X_val_rul, y_val_rul,
+                X_test_rul, y_test_rul,
+                task_type
+            )
             
-                    if result['status'] == 'success':
-                        # Run cross-validation on training data
-                        print(f"    Running cross-validation...")
-                        cv_results = run_cross_validation(
-                            model, X_train, y_train, groups_train, cv=5, task_type=task_type
-                        )
-                        result['cv_results'] = cv_results
-                    
-                    print(f"    Val {task_type}: {result['val_metrics']}")
-                    print(f"    Test {task_type}: {result['test_metrics']}")
-                    if task_type == 'regression':
-                        print(f"    CV MAE: {cv_results['cv_mae_mean']:.4f} ± {cv_results['cv_mae_std']:.4f}")
-                    else:
-                        print(f"    CV F1: {cv_results['cv_f1_mean']:.4f} ± {cv_results['cv_f1_std']:.4f}")
-                    target_results[model_name] = result
+            if result['status'] == 'success':
+                # Run cross-validation on training data
+                print(f"    Running cross-validation...")
+                # For RUL, use filtered training data
+                if target_name == 'rul':
+                    # Determine number of groups for CV
+                    n_groups_rul = len(np.unique(groups_train[train_mask]))
+                    cv_splits = min(5, n_groups_rul)
+                    if cv_splits < 2:
+                        cv_splits = 2
+                    cv_results = run_cross_validation(
+                        model, X_train_rul, y_train_rul, groups_train[train_mask], cv=cv_splits, task_type=task_type
+                    )
+                else:
+                    cv_results = run_cross_validation(
+                        model, X_train, y_train, groups_train, cv=5, task_type=task_type
+                    )
+                result['cv_results'] = cv_results
+            
+            print(f"    Val {task_type}: {result['val_metrics']}")
+            print(f"    Test {task_type}: {result['test_metrics']}")
+            if task_type == 'regression':
+                print(f"    CV MAE: {cv_results['cv_mae_mean']:.4f} ± {cv_results['cv_mae_std']:.4f}")
+            else:
+                print(f"    CV F1: {cv_results['cv_f1_mean']:.4f} ± {cv_results['cv_f1_std']:.4f}")
+            target_results[model_name] = result
         
         results[target_name] = target_results
     
@@ -345,7 +431,7 @@ def plot_results(results: Dict, enriched: pd.DataFrame, test_idx: np.ndarray):
         is_classification = 'encoded' in target_name
         best_model_name = max(
             (m for m, r in target_results.items() if r['status'] == 'success'),
-            key=lambda m: target_results[m]['val_metrics'].get('F1', -target_results[m]['val_metrics'].get('MAE', np.inf)),
+            key=lambda m: target_results[m]['val_metrics'].get('F1_macro', -target_results[m]['val_metrics'].get('MAE', np.inf)),
             default=None
         )
         
@@ -513,7 +599,16 @@ def generate_model_report(results: Dict, best_models: Dict[str, str]) -> str:
             
             if is_classification:
                 report_lines.append(f"  {model_name}:")
-                report_lines.append(f"    Validation - Acc: {metrics['Accuracy']:.4f}, Prec: {metrics['Precision']:.4f}, Rec: {metrics['Recall']:.4f}, F1: {metrics['F1']:.4f}")
+                report_lines.append(
+                    f"    Validation - Acc: {metrics['Accuracy']:.4f}, "
+                    f"Balanced_Acc: {metrics['Balanced_Accuracy']:.4f}, "
+                    f"Precision_weighted: {metrics['Precision_weighted']:.4f}, "
+                    f"Precision_macro: {metrics['Precision_macro']:.4f}, "
+                    f"Recall_weighted: {metrics['Recall_weighted']:.4f}, "
+                    f"Recall_macro: {metrics['Recall_macro']:.4f}, "
+                    f"F1_weighted: {metrics['F1_weighted']:.4f}, "
+                    f"F1_macro: {metrics['F1_macro']:.4f}"
+                )
                 if 'cv_f1_mean' in cv_metrics:
                     report_lines.append(f"    CV F1: {cv_metrics['cv_f1_mean']:.4f} ± {cv_metrics['cv_f1_std']:.4f}")
             else:
@@ -524,13 +619,19 @@ def generate_model_report(results: Dict, best_models: Dict[str, str]) -> str:
             
             test_metrics = result['test_metrics']
             if is_classification:
-                report_lines.append(f"    Test       - Acc: {test_metrics['Accuracy']:.4f}, F1: {test_metrics['F1']:.4f}")
+                report_lines.append(
+                    f"    Test       - Acc: {test_metrics['Accuracy']:.4f}, "
+                    f"Balanced_Acc: {test_metrics['Balanced_Accuracy']:.4f}, "
+                    f"F1_weighted: {test_metrics['F1_weighted']:.4f}, "
+                    f"F1_macro: {test_metrics['F1_macro']:.4f}"
+                )
             else:
                 report_lines.append(f"    Test       - MAE: {test_metrics['MAE']:.4f}, RMSE: {test_metrics['RMSE']:.4f}, R2: {test_metrics['R2']:.4f}")
     
     report_lines.append("\n" + "=" * 80)
     report_lines.append("NOTE: All splits are battery-wise (GroupShuffleSplit) to prevent data leakage.")
     report_lines.append("Cross-validation uses GroupKFold by battery_id.")
+    report_lines.append("Classification metrics: weighted and macro F1, balanced accuracy.")
     report_lines.append("=" * 80)
     
     return "\n".join(report_lines)
@@ -553,7 +654,7 @@ def main():
     
     # Train all models
     print("\nTraining models...")
-    results = train_all_models(X, y, groups, train_idx, val_idx, test_idx)
+    results = train_all_models(X, y, groups, train_idx, val_idx, test_idx, enriched)
     
     # Select best models
     print("\nSelecting best models...")

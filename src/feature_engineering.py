@@ -216,6 +216,8 @@ def compute_failure_risk(df: pd.DataFrame, prediction_horizon: int = 20) -> pd.D
     # Within the next `prediction_horizon` cycles
     df['future_failure'] = 0
     df['future_failure_encoded'] = 0
+    # Add observation window flag: 1 = full prediction horizon observed, 0 = censored
+    df['future_failure_observed'] = 0
     
     for bid in df['battery_id'].unique():
         battery_data = df[df['battery_id'] == bid].sort_values('cycle')
@@ -229,10 +231,27 @@ def compute_failure_risk(df: pd.DataFrame, prediction_horizon: int = 20) -> pd.D
             if future_mask.any():
                 future_soh = soh_values[future_mask]
                 future_deg = deg_values[future_mask]
+                # Check if we have a FULL prediction horizon window (or failure already occurred)
+                # Full window means the maximum future cycle is at least prediction_horizon cycles ahead
+                # or a failure event occurred
+                full_window = (cycles[future_mask].max() - cycles[i] >= prediction_horizon - 1)
+                
                 # Failure condition: SOH < 70% OR degradation > 0.3% (critical)
-                if (future_soh < 70).any() or (future_deg > 0.3).any():
+                failure_occurred = (future_soh < 70).any() or (future_deg > 0.3).any()
+                
+                if failure_occurred:
                     df.loc[battery_data.index[i], 'future_failure'] = 1
                     df.loc[battery_data.index[i], 'future_failure_encoded'] = 1
+                    df.loc[battery_data.index[i], 'future_failure_observed'] = 1  # Observed failure
+                elif full_window:
+                    df.loc[battery_data.index[i], 'future_failure'] = 0
+                    df.loc[battery_data.index[i], 'future_failure_encoded'] = 0
+                    df.loc[battery_data.index[i], 'future_failure_observed'] = 1  # Full window observed, no failure
+                else:
+                    # Incomplete observation window - label as 0 but mark as not fully observed
+                    df.loc[battery_data.index[i], 'future_failure'] = 0
+                    df.loc[battery_data.index[i], 'future_failure_encoded'] = 0
+                    df.loc[battery_data.index[i], 'future_failure_observed'] = 0  # Censored
     
     return df, {'low_thresh': 0.30, 'high_thresh': 0.65, 'prediction_horizon': prediction_horizon}
 
